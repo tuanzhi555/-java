@@ -1,0 +1,40 @@
+
+# ---------------- PersistentVolume (PV)：持久卷 ----------------
+apiVersion: v1                     # API 版本，PV 属于 core/v1
+kind: PersistentVolume             # 资源类型：PersistentVolume（持久卷）
+metadata:
+  name: onlinemall-pv              # PV 的名字，叫 onlinemall-pv
+spec:
+  capacity:
+    storage: 50Gi                  # PV 的容量大小 = 50GiB
+  accessModes:
+    - ReadWriteMany                # 访问模式：
+                                   #   ReadWriteMany (RWX) = 多个节点的 Pod 可同时读写
+                                   #   典型用于 NFS 场景
+  persistentVolumeReclaimPolicy: Retain
+                                   # 回收策略：PVC 删除后 PV 不会自动清理，数据仍保留
+                                   # - Retain：保留数据（安全，避免误删）
+                                   # - Delete：自动删除后端存储（不常用于 NFS）
+                                   # - Recycle：已废弃
+  nfs:                             # NFS 类型的存储
+    server: 192.168.163.11         # NFS 服务器地址（这里是 master 节点的 IP）
+    path: /srv/nfs/onlinemall      # NFS 导出的目录
+                                   # 必须在服务器上提前创建，且有子目录 file/ 和 avatar/
+                                   # 一般命令：
+                                   #   mkdir -p /srv/nfs/onlinemall/{file,avatar}
+                                   #   chmod -R 0777 /srv/nfs/onlinemall
+---
+# ---------------- PersistentVolumeClaim (PVC)：持久卷声明 ----------------
+apiVersion: v1                     # API 版本，PVC 属于 core/v1
+kind: PersistentVolumeClaim        # 资源类型：PVC（持久卷声明）
+metadata:
+  name: onlinemall-pvc             # PVC 的名字，叫 onlinemall-pvc
+spec:
+  accessModes:
+    - ReadWriteMany                # 申请的访问模式：RWX（必须和 PV 匹配）
+  resources:
+    requests:
+      storage: 50Gi                # 请求存储大小 50GiB（会绑定到上面定义的 PV）
+  volumeName: onlinemall-pv        # 指定绑定哪个 PV（这里就是 onlinemall-pv）
+                                   # 如果不写，K8s 会自动寻找符合条件的 PV
+

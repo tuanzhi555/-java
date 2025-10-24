@@ -1,0 +1,58 @@
+
+# ---------------- Deployment：后端应用 ----------------
+apiVersion: apps/v1              # API 版本，Deployment 属于 apps/v1
+kind: Deployment                 # 资源类型：Deployment（无状态应用部署）
+metadata:
+  name: backend                  # Deployment 名字叫 backend
+spec:
+  replicas: 1                     # 副本数量=1，只运行一个 Pod
+  selector:                       # Deployment 如何选择它要管理的 Pod
+    matchLabels:                  # 匹配规则
+      app: backend                # 匹配标签 app=backend 的 Pod
+  template:                       # Pod 模板（Deployment 会用它来创建 Pod）
+    metadata:
+      labels:
+        app: backend              # 给 Pod 打上标签 app=backend，方便 Service 选中
+    spec:
+      imagePullSecrets:           # 指定镜像拉取密钥（用于私有 Harbor 仓库）
+        - name: harbor-creds      # Secret 名字 harbor-creds（存储登录 Harbor 的用户名密码）
+      # 安全上下文配置
+      securityContext:
+        fsGroup: 0                # 给容器进程一个附加组 ID（0=root 组），
+                                  # 常用于挂载 NFS 卷时避免权限问题
+      containers:                 # 容器列表（一个 Pod 可以运行多个容器）
+        - name: backend           # 容器名字叫 backend
+          image: 192.168.163.135/library/onlinemall-backend:1.0.1
+                                  # 使用 Harbor 上的后端镜像 onlinemall-backend:1.0.1
+          ports:
+            - containerPort: 8888 # 容器内部监听的端口（Spring Boot 通常是 8888）
+          volumeMounts:           # 挂载持久存储卷（PVC）
+            - name: uploads
+              mountPath: /app/file
+              subPath: file       # 把 PVC 中的 file 子目录挂到容器的 /app/file
+            - name: uploads
+              mountPath: /app/avatar
+              subPath: avatar     # 把 PVC 中的 avatar 子目录挂到容器的 /app/avatar
+      volumes:                    # 定义卷（Pod 使用的存储）
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: onlinemall-pvc
+                                  # 使用 PVC：onlinemall-pvc
+                                  # PVC 再去绑定 PV（通常是 NFS），保证数据持久化
+---
+# ---------------- Service：暴露后端应用 ----------------
+apiVersion: v1                   # API 版本，Service 属于 core/v1
+kind: Service                    # 资源类型：Service
+metadata:
+  name: backend                  # Service 名字叫 backend
+spec:
+  type: NodePort                 # Service 类型：NodePort，把服务暴露到每个节点的固定端口
+  selector:
+    app: backend                 # 选择标签 app=backend 的 Pod（即上面 Deployment 创建的 Pod）
+  ports:
+    - port: 8888                 # Service 在集群内部的逻辑端口（集群内访问用）
+      targetPort: 8888           # Pod 容器实际监听的端口（必须和 containerPort 对应）
+      nodePort: 31072            # 节点对外暴露的端口（集群外访问用）
+                                  # 外部访问方式：http://<任意节点IP>:31072
+                                  # 例如：http://192.168.163.11:31072
+

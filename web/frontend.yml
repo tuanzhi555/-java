@@ -1,0 +1,41 @@
+
+# ---------------- Deployment：前端应用 ----------------
+apiVersion: apps/v1              # API 版本，Deployment 属于 apps/v1
+kind: Deployment                 # 资源类型：Deployment（无状态应用部署）
+metadata:
+  name: frontend                 # Deployment 名字叫 frontend
+spec:
+  replicas: 2                    # 副本数量=1，表示只运行一个 Pod
+  selector:                       # Deployment 如何选择它要管理的 Pod
+    matchLabels:                  # 匹配规则
+      app: frontend               # 必须匹配标签 app=frontend 的 Pod
+  template:                       # Pod 模板（Deployment 根据它创建 Pod）
+    metadata:
+      labels:
+        app: frontend             # 给 Pod 打上标签 app=frontend，方便 Service 选中
+    spec:
+      imagePullSecrets:           # 指定镜像拉取密钥（私有仓库）
+        - name: harbor-creds      # Secret 名字是 harbor-creds，用于拉取 Harbor 镜像
+      containers:                 # 容器列表（一个 Pod 可以运行多个容器）
+        - name: frontend          # 容器的名字叫 frontend
+          image: 192.168.163.135/library/onlinemall-frontend:1.0.3
+                                  # 容器镜像，从 Harbor 仓库拉取 onlinemall-frontend:1.0.3
+          ports:
+            - containerPort: 80   # 容器内部监听端口，Nginx 默认是 80
+---
+# ---------------- Service：暴露前端应用 ----------------
+apiVersion: v1                   # API 版本，Service 属于 core/v1
+kind: Service                    # 资源类型：Service
+metadata:
+  name: frontend                 # Service 名字叫 frontend
+spec:
+  type: NodePort                 # Service 类型：NodePort，把服务暴露到每个节点的固定端口
+  selector:
+    app: frontend                # 选择标签 app=frontend 的 Pod（即上面 Deployment 创建的 Pod）
+  ports:
+    - port: 80                   # Service 在集群内部暴露的端口（集群内访问用）
+      targetPort: 80             # Pod 容器实际监听的端口（必须和 containerPort 对应）
+      nodePort: 30081            # 节点对外暴露的端口（集群外访问用）
+                                  # 外部访问方式：http://<任意节点IP>:30081
+                                  # 例如：http://192.168.163.11:30081
+
